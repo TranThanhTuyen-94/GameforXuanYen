@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8" />
+  <title>LexLoop Vocabulary Game</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
+  <style>
+    @media (max-width: 480px) {
+  .lesson-grid {
+    grid-template-columns: 1fr; /* One column */
+    justify-items: center;      /* Center align items */
+  }
+
+  .lesson-grid label {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      text-align: center;
+      padding: 40px 20px;
+      background-color: #f9f9f9;
+    }
+
+    h1, h2 {
+      font-size: 2em;
+      margin-bottom: 0.2em;
+      color: #2e8b57;
+    }
+
+    .light-yellow {
+      background-color: #fff9c4;
+      color: #333;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 24px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .light-yellow:hover {
+      background-color: #fff176;
+    }
+
+    .lesson-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px 20px;
+      justify-items: start;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .lesson-grid label {
+      display: block;
+      background-color: #f0f8ff;
+      padding: 10px;
+      border-radius: 8px;
+      color: #001f3f;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .lesson-grid input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    .option-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .option-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 1em;
+      font-weight: normal;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .option-btn:hover {
+      transform: scale(1.03);
+    }
+
+    .light-navy {
+      background-color: #e0e7f8;
+      color: #001f3f;
+    }
+
+    .light-green {
+      background-color: #e6f9e6;
+      color: #2e8b57;
+    }
+
+    .light-purple {
+      background-color: #f3e8ff;
+      color: #6a0dad;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .timer-bar {
+      height: 10px;
+      background-color: #2e8b57;
+      border-radius: 5px;
+      margin-top: 20px;
+      transition: width 3s linear;
+    }
+
+    .stats {
+      font-weight: bold;
+      color: #001f3f;
+      margin-bottom: 20px;
+    }
+
+    #forgottenList li {
+      background-color: #f0f8ff;
+      color: #001f3f;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 8px;
+      text-align: left;
+    }
+
+    @media (max-width: 480px) {
+      .lesson-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .container {
+        padding: 20px;
+      }
+
+      .option-btn {
+        font-size: 1.1em;
+      }
+
+      h1, h2 {
+        font-size: 1.5em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="startPage">
+      <h1>Select Lessons</h1>
+      <div id="lessonList" class="lesson-grid"></div>
+      <button id="startBtn" class="light-yellow" disabled>Start Check</button>
+    </div>
+
+    <div id="gamePage" class="hidden">
+      <h2 id="wordDisplay">Word</h2>
+      <div id="options"></div>
+      <div class="timer-bar" id="timerBar"></div>
+    </div>
+
+    <div id="endPage" class="hidden">
+      <h2>Forgotten Words</h2>
+      <div class="stats" id="finalStats"></div>
+      <ul id="forgottenList"></ul>
+    </div>
+  </div>
+
+  <script>
+    const SHEET_ID = "1PGKAbRIC0fP7IFK1UWAmqgcGI6xFZ114OBJ2CSIiMHk";
+    const API_KEY = "AIzaSyDTI3yXucHM8LHQeSXJYYJJYVzufW0R6ik";
+
+    const lessonList = document.getElementById("lessonList");
+    const startBtn = document.getElementById("startBtn");
+    const startPage = document.getElementById("startPage");
+    const gamePage = document.getElementById("gamePage");
+    const wordDisplay = document.getElementById("wordDisplay");
+    const optionsDiv = document.getElementById("options");
+    const timerBar = document.getElementById("timerBar");
+    const endPage = document.getElementById("endPage");
+    const forgottenList = document.getElementById("forgottenList");
+    const finalStats = document.getElementById("finalStats");
+
+    let selectedLessons = [];
+    let gameWords = [];
+    let currentIndex = 0;
+    let correctCount = 0;
+    let forgottenWords = [];
+    let timer;
+    let allAnswers = [];
+    let answered = false;
+
+    async function loadSheetNames() {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const sheets = data.sheets.map(s => s.properties.title);
+
+      sheets.forEach(name => {
+        const label = document.createElement("label");
+        label.innerHTML = `<input type="checkbox" value="${name}"> ${name}`;
+        lessonList.appendChild(label);
+      });
+
+      lessonList.addEventListener("change", () => {
+        selectedLessons = Array.from(lessonList.querySelectorAll("input:checked")).map(cb => cb.value);
+        startBtn.disabled = selectedLessons.length < 2;
+      });
+    }
+
+    startBtn.addEventListener("click", async () => {
+      gameWords = [];
+      allAnswers = [];
+
+      for (const sheet of selectedLessons) {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${sheet}?key=${API_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const rows = data.values;
+
+        rows.forEach(row => {
+          if (row[0] && row[2]) {
+            gameWords.push({ word: row[0], answer: row[2], sheet });
+            allAnswers.push(row[2]);
+          }
+        });
+      }
+      // ✅ Step 1: Remove duplicate words
+gameWords = gameWords.filter((v, i, a) => a.findIndex(t => t.word === v.word) === i);
+
+// ✅ Step 2: Remove duplicate answers
+allAnswers = [...new Set(allAnswers)];
+
+      shuffle(gameWords);
+      startPage.classList.add("hidden");
+      gamePage.classList.remove("hidden");
+      showWord();
+    });
+
+    function showWord() {
+      clearTimeout(timer);
+      if (currentIndex >= gameWords.length) return endGame();
+
+      const current = gameWords[currentIndex];
+      wordDisplay.textContent = current.word;
+      answered = false;
+
+      const distractersPool = allAnswers.filter(ans => ans !== current.answer);
+      shuffle(distractersPool);
+      const distracters = distractersPool.slice(0, 2);
+
+      const options = [current.answer, ...distracters];
+      shuffle(options);
+
+      optionsDiv.innerHTML = "";
+      optionsDiv.className = "option-stack";
+      const colorClasses = ["light-navy", "light-green", "light-purple"];
+
+      options.forEach((opt, index) => {
+        const btn = document.createElement("button");
+        btn.className = `option-btn ${colorClasses[index % colorClasses.length]}`;
+        btn.textContent = opt;
+        btn.onclick = () => {
+          answered = true;
+          clearTimeout(timer);
+          if (opt === current.answer) {
+            correctCount++;
+          } else {
+            forgottenWords.push({
+              word: current.word,
+              answer: current.answer,
+              wrong: opt
+            });
+          }
+          nextWord();
+        };
+        optionsDiv.appendChild(btn);
+      });
+
+      timerBar.style.width = "100%";
+      timerBar.offsetHeight;
+      timerBar.style.transition = "width 3s linear";
+      timerBar.style.width = "0%";
+
+          timer = setTimeout(() => {
+        if (!answered) {
+          forgottenWords.push({
+            word: current.word,
+            answer: current.answer,
+            wrong: "No answer"
+          });
+        }
+        nextWord();
+      }, 3000);
+    }
+
+    function nextWord() {
+      clearTimeout(timer);
+      currentIndex++;
+      showWord();
+    }
+
+    function endGame() {
+      gamePage.classList.add("hidden");
+      endPage.classList.remove("hidden");
+
+      finalStats.textContent = `Final Score: ${correctCount} / ${gameWords.length}`;
+
+      if (forgottenWords.length === 0) {
+        forgottenList.innerHTML = `<li>🎉 You remembered everything! Great job!</li>`;
+      } else {
+        forgottenList.innerHTML = forgottenWords.map(item => {
+          return `<li><strong>${item.word}</strong>: ${item.answer}</li>`;
+        }).join("");
+      }
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    window.onload = loadSheetNames;
+  </script>
+</body>
+</html>
+
